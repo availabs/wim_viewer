@@ -93,7 +93,9 @@
 			  		
 		  		$scope.$apply(function() {
 		  			$scope.stations = [];
-		  			$scope.stationsClass = [];
+		  			//$scope.stationsClass = [];
+		  			$scope.stationsWeight = [];
+		  			$scope.overWeightTrucks = [];
 		  		});
 				clicked = false;
 			}
@@ -206,66 +208,343 @@
 				id = '0' + id;
 			}
 
-		  	var stations = [];
+			//On first runs, initialize the graphs
 
-			wimXHR.get(URL + id, function(error, data) {
-            	if (error) {
-            		console.log(error);
-            		return;
-            	}
-            	if(data.rows != undefined){
-			  		data.rows.forEach(function(row){
-			  			var rowStation = row.f[0].v;
-			  			if(getStationIndex(rowStation) == -1) {
-			  				stations.push({'stationId':rowStation, years:[]})
-			  			}
-			  			stations[getStationIndex(rowStation)].years.push({'year':row.f[1].v,'percent':(row.f[4].v)*100,'AADT':Math.round(row.f[5].v)});
-			  		});
-			  	}
-		  		if (centered) {
-			  		$scope.$apply(function(){
-			  			//$scope.stations = stations;
-			  		});
-			  	}
+			if($scope.curYearWeight === "FR"){
+				AADTGraph.initAADTGraph("#barGraph");
+			    truckWeightGraph.initTruckWeightGraph("#barGraph");
+			    lineChart.initlineChart("#barGraph");
+			    monthlyLineChart.initMonthlylLineChart("#barGraph");
+			}
 
-			});
-			URL = 'stations/byState/class/'
+			//Stations class must be outside the load graphs scope due to the data being worked with
+
 			var stationsClass = [];
 
-			wimXHR.get(URL + id, function(error, data) {
-				if (error) {
-            		console.log(error);
-            		return;
-            	}
-            	if(data.rows != undefined){
-			  		data.rows.forEach(function(row){
-				  			var rowStation = row.f[0].v;
-				  			if(getStationIndex(rowStation,"class") == -1) {
-				  				stationsClass.push({'stationId':rowStation, years:[],heights:[],'AAPT':0,'AASU':0,'AATT':0})
-				  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
-				  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
-				  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
-				  			}
-				  			stationsClass[getStationIndex(rowStation,"class")].years.push({'year':row.f[1].v,'ADT':Math.round(row.f[2].v),'APT':Math.round(row.f[3].v),'ASU':Math.round(row.f[4].v),'ATT':Math.round(row.f[5].v)});
-				  			
-			  		});
-		  		}
-		  		if (centered) {
-			  		$scope.$apply(function(){
-			  			$scope.stationsClass = stationsClass;
-			  		});
-			  	}
+			
 
-			});
+			/*
 
+			The below function is called by pressing the apply button. It draws graphs and the bar table based on various conditions
+
+			*/
+
+
+			$scope.loadGraphs = function(){
+				
+				var yearArr = []; //Used in the bar graph for year data
+				
+				//When trying to display year data for the first time or when switching from weight data. 
+				//In the future it would be better to switch the condition to run this to be only when
+				//the state is changed
+				if(($scope.curYearWeight === "FR" && $scope.myBarType === "Year") || ($scope.curYearWeight === "Weight" && $scope.myBarType === "Year")){
+
+					//Empty array of previous year data. This method is supposedly faster than stations.length = 0
+					while(stationsClass.length > 0){
+						stationsClass.pop()
+					}
+
+					URL = 'stations/byState/class/'
+					
+
+					wimXHR.get(URL + id, function(error, data) {
+						if (error) {
+		            		console.log(error);
+		            		return;
+		            	}
+		            	if(data.rows != undefined){
+					  		data.rows.forEach(function(row){
+						  			var rowStation = row.f[0].v;
+						  			if(getStationIndex(rowStation,"class") == -1) {
+						  				stationsClass.push({'stationId':rowStation, years:[],heights:[],'AAPT':0,'AASU':0,'AATT':0})
+						  				//For the heights of the various sub columns
+						  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
+						  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
+						  				stationsClass[getStationIndex(rowStation,"class")].heights.push({'y0':0,'y1':0})
+						  			}
+						  			if(parseInt(row.f[1].v) < 10){
+						  				row.f[1].v = "0"+row.f[1].v
+						  			}
+						  			stationsClass[getStationIndex(rowStation,"class")].years.push({'year':row.f[1].v,'ADT':Math.round(row.f[2].v),'APT':Math.round(row.f[3].v),'ASU':Math.round(row.f[4].v),'ATT':Math.round(row.f[5].v)});
+						  			
+					  		});
+				  		}
+				  		 $scope.stationsClass = JSON.parse(JSON.stringify(stationsClass));
+					  			barTable.removeTable();
+					  			if($scope.myBarType === "Year"){
+							          while(yearArr.length > 0){
+							            yearArr.pop()
+							          }
+							          if($scope.myYearA != "--"){
+							            if($scope.myYearB != "--"){
+							              yearArr = [$scope.myYearA,$scope.myYearB]
+							            }
+							            else{
+							              yearArr = [$scope.myYearA]
+							            }
+							          }
+							          if($scope.stationsClass.length != 0){
+							            barTable.drawTable($scope.stationsClass);
+							          }
+							          AADTGraph.drawAADTGraph($scope.stationsClass,"class",$scope.myVehicleTypeArr,yearArr);
+							          $scope.curYearWeight = "Year" 
+							        }
+
+				});
+			}
+			//If looking at the same data again
+			else if(($scope.curYearWeight === $scope.myBarType) && $scope.curYearWeight === "Year") {
+					barTable.removeTable();
+					$scope.stationsClass = JSON.parse(JSON.stringify(stationsClass));
+					if($scope.myBarType === "Year"){
+						          while(yearArr.length > 0){
+						            yearArr.pop()
+						          }
+						          if($scope.myYearA != "--"){
+						            if($scope.myYearB != "--"){
+						              yearArr = [$scope.myYearA,$scope.myYearB]
+						            }
+						            else{
+						              yearArr = [$scope.myYearA]
+						            }
+						          }
+						          if($scope.stationsClass.length != 0){
+						            barTable.drawTable($scope.stationsClass);
+						          }
+						          AADTGraph.drawAADTGraph($scope.stationsClass,"class",$scope.myVehicleTypeArr,yearArr); 
+						        }
+			}
+						
+			/*The following block of code is used for creating a bar graph that looks at total weight over total time
+			at the station. Works in the same manner as the above block of code*/
+
+			if(($scope.curYearWeight === "FR" && $scope.myBarType === "Weight") || ($scope.curYearWeight === "Year" && $scope.myBarType === "Weight")){
+				
+				URL = 'stations/byState/weight/'
+				var stationsWeight = [];
+			    wimXHR.post(URL + id, {class:$scope.myTruckClass},function(error, data) {
+					if (error) {
+	            		console.log(error);
+	            		return;
+	            	}
+	            	if(data.rows != undefined){
+
+	            		data.rows.forEach(function(row){
+							var rowStation = row.f[0].v;
+							if(getStationIndex(rowStation,"weight") == -1) {
+								stationsWeight.push({'stationId':rowStation, years:[]})
+								
+							}
+							if(parseInt(row.f[1].v) < 10){
+								row.f[1].v = "0"+row.f[1].v
+							}
+							stationsWeight[getStationIndex(rowStation,"weight")].years.push({'year':row.f[1].v,'hours':row.f[2].v,'Weight':row.f[3].v});
+						
+						});
+				  		
+				  		
+						  		$scope.stationsWeight = JSON.parse(JSON.stringify(stationsWeight));
+						  		barTable.removeTable();
+						  		AADTGraph.drawAADTGraphWeight($scope.stationsWeight,"weight",$scope.myTruckClass);
+              					$scope.curYearWeight = "Weight"
+
+				  	}
+
+				});
+			}
+			else if(($scope.curYearWeight === $scope.myBarType) && $scope.curYearWeight === "Weight"){
+				$scope.stationsWeight = JSON.parse(JSON.stringify(stationsWeight));
+				barTable.removeTable();
+				AADTGraph.drawAADTGraphWeight($scope.stationsWeight,"weight",$scope.myTruckClass);
+              					
+			}
+
+			//Below are the overweight truck data.
+
+			//REMEMEBER TO EDIT THE THRESHOLD AS SOME POINT SO IT ISN'T ALWAYS A CONSTANT!!!!!
+
+			//Runs in the same manner as the above two blocks of code
+
+			if($scope.curLine === "FR" || ($scope.curLine !== $scope.myLine)){
+				
+				URL = 'stations/byState/overweight/'
+				var overWeight = [];
+				var count = 0
+				if($scope.myLine === "on"){
+					var lineGraph = "month"
+				}
+				else{
+					var lineGraph = $scope.myTimePeriod
+				}
+				wimXHR.post(URL + id,{timeType:lineGraph,threshold:80000,queryType:$scope.myLine} ,function(error, data) {
+			    	if (error) {
+	            		console.log(error);
+	            		return;
+	            	}
+	            	if(data.rows != undefined){
+	            		data.rows.forEach(function(row){
+							var rowStation = row.f[0].v;
+							if(getStationIndex(rowStation,"overweight") == -1) {
+								if($scope.myLine ==="on"){
+									overWeight.push({'stationId':rowStation, 'funcCode': row.f[4].v,perOverWeight:[0,0,0,0,0,0,0,0,0,0,0,0],avgOverWeight:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]})
+								}
+								else{
+									overWeight.push({'stationId':rowStation, years:[]})							
+								}
+							}
+							if(parseInt(row.f[3].v) < 10){
+								row.f[3].v = "0"+row.f[3].v
+							}
+
+							if($scope.myLine === "off"){
+								overWeight[getStationIndex(rowStation,"overweight")].years.push({'overweightTrucks':row.f[1].v,'numTrucks':row.f[2].v,'year':row.f[3].v})
+							}
+							else{
+								overWeight[getStationIndex(rowStation,"overweight")].avgOverWeight[parseInt(row.f[3].v)-1] = overWeight[getStationIndex(rowStation,"overweight")].avgOverWeight[parseInt(row.f[3].v)-1] + parseInt(row.f[1].v)
+								overWeight[getStationIndex(rowStation,"overweight")].perOverWeight[parseInt(row.f[3].v)-1] = overWeight[getStationIndex(rowStation,"overweight")].perOverWeight[parseInt(row.f[3].v)-1] + parseInt(row.f[2].v)
+								overWeight[getStationIndex(rowStation,"overweight")].avgOverWeight[parseInt(row.f[3].v)+11] = overWeight[getStationIndex(rowStation,"overweight")].avgOverWeight[parseInt(row.f[3].v)+11] + 1
+							}
+							});
+				  		
+				  		// if (centered) {
+					  		
+						  // 	$scope.$apply(function(){
+						  		if($scope.myLine === "on"){
+							  		for(var i = 0;i<overWeight.length;i++){
+							  			for(var j = 0;j<12;j++){
+							  				if(overWeight[i].avgOverWeight[12] != 0){
+							  					overWeight[i].avgOverWeight[j] = overWeight[i].avgOverWeight[j] / overWeight[i].avgOverWeight[12]
+							  					overWeight[i].perOverWeight[j] = overWeight[i].perOverWeight[j] / overWeight[i].avgOverWeight[12]
+							  					overWeight[i].perOverWeight[j] = overWeight[i].avgOverWeight[j] / overWeight[i].perOverWeight[j]
+							  					overWeight[i].perOverWeight[j] = overWeight[i].perOverWeight[j] * 100
+							  				}
+							  				overWeight[i].avgOverWeight.splice(12,1)
+							  			}
+							  		}
+							  	}
+						  		$scope.overWeightTrucks = overWeight;
+						  		if($scope.myLine === "on"){
+						            lineChart.drawlineChart($scope.overWeightTrucks,$scope.myOrder);
+						            $scope.curLine = $scope.myLine
+						          }
+						          else{
+						            truckWeightGraph.drawTruckWeightGraph($scope.overWeightTrucks,$scope.myOrder,$scope.myTimePeriod);
+						            $scope.curLine = $scope.myLine
+
+						          }
+						//   	});
+						// }	
+				  	}
+
+				});
+			}
+			else if($scope.myLine === $scope.curLine){
+				if($scope.myLine === "on"){
+            		lineChart.drawlineChart($scope.overWeightTrucks,$scope.myOrder);
+          		}
+		        else{
+		            truckWeightGraph.drawTruckWeightGraph($scope.overWeightTrucks,$scope.myOrder,$scope.myTimePeriod);
+		            
+		        }
+			}
+
+			//Monthly AADT
+
+			if($scope.curState === "Blank" && $scope.myTimePeriod2 === "month"){
+
+			URL = 'stations/byState/byMonthLine/'
+				var stationsMonth = [];
+			    wimXHR.get(URL + id, function(error, data) {
+					if (error) {
+	            		console.log(error);
+	            		return;
+	            	}
+	            	if(data.rows != undefined){
+
+	            		data.rows.forEach(function(row){
+							var rowStation = row.f[0].v;
+							if(getStationIndex(rowStation,"month") == -1) {
+								stationsMonth.push({'stationId':rowStation, 'funcCode':row.f[6].v,monthsAll:[0,0,0,0,0,0,0,0,0,0,0,0], monthsAPT:[0,0,0,0,0,0,0,0,0,0,0,0], monthsASU:[0,0,0,0,0,0,0,0,0,0,0,0], monthsATT:[0,0,0,0,0,0,0,0,0,0,0,0]})
+								
+							}
+							stationsMonth[getStationIndex(rowStation,"month")].monthsAll[parseInt(row.f[1].v)-1] = parseInt(row.f[2].v)
+							stationsMonth[getStationIndex(rowStation,"month")].monthsAPT[parseInt(row.f[1].v)-1] = parseInt(row.f[3].v)
+							stationsMonth[getStationIndex(rowStation,"month")].monthsASU[parseInt(row.f[1].v)-1] = parseInt(row.f[4].v)
+							stationsMonth[getStationIndex(rowStation,"month")].monthsATT[parseInt(row.f[1].v)-1] = parseInt(row.f[5].v)
+							
+
+						
+						});
+				  		
+				  		
+						  		$scope.stationsMonthlyTraffic = JSON.parse(JSON.stringify(stationsMonth));
+						  		monthlyLineChart.drawMonthlyLineChart($scope.stationsMonthlyTraffic,$scope.myMonthlyTraffic);
+              					
+				  	}
+
+				});
+			}
+			else if($scope.myTimePeriod2 === "month"){
+				monthlyLineChart.drawMonthlyLineChart($scope.stationsMonthlyTraffic,$scope.myMonthlyTraffic);
+			}
+
+			if($scope.curState === "Blank" && $scope.myTimePeriod2 === "hour"){
+			URL = 'stations/byState/byHourLine/'
+				var stationsHour = [];
+			    wimXHR.get(URL + id,function(error, data) {
+					if (error) {
+	            		console.log(error);
+	            		return;
+	            	}
+	            	if(data.rows != undefined){
+
+	            		data.rows.forEach(function(row){
+							var rowStation = row.f[0].v;
+							if(getStationIndex(rowStation,"hour") == -1) {
+								stationsHour.push({'stationId':rowStation, 'funcCode':row.f[6].v,hoursAll:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], hoursAPT:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], hoursASU:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0], hoursATT:[0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0,0]})
+								
+							}
+							stationsHour[getStationIndex(rowStation,"hour")].hoursAll[parseInt(row.f[1].v)] = parseInt(row.f[2].v)
+							stationsHour[getStationIndex(rowStation,"hour")].hoursAPT[parseInt(row.f[1].v)] = parseInt(row.f[3].v)
+							stationsHour[getStationIndex(rowStation,"hour")].hoursASU[parseInt(row.f[1].v)] = parseInt(row.f[4].v)
+							stationsHour[getStationIndex(rowStation,"hour")].hoursATT[parseInt(row.f[1].v)] = parseInt(row.f[5].v)
+							
+
+						
+						});
+				  		
+				  				$scope.stationsHourlyTraffic = JSON.parse(JSON.stringify(stationsHour));
+						  		monthlyLineChart.drawHourlyLineChart($scope.stationsHourlyTraffic,$scope.myMonthlyTraffic);
+              					
+				  	}
+
+				});
+			}
+			else if($scope.myTimePeriod2 === "hour"){
+				monthlyLineChart.drawHourlyLineChart($scope.stationsHourlyTraffic,$scope.myMonthlyTraffic);
+			}
+			
 		  	function getStationIndex(stationID,classT){
-		  		if(classT != "class"){
+		  		if(classT === "weight"){
+		  			return stationsWeight.map(function(el) {return el.stationId;}).indexOf(stationID)
+		  		}
+		  		else if(classT === "overweight"){
+		  			return overWeight.map(function(el) {return el.stationId;}).indexOf(stationID)
+		  		}
+		  		else if(classT === "month"){
+		  			return stationsMonth.map(function(el){return el.stationId;}).indexOf(stationID)
+		  		}
+		  		else if(classT === "hour"){
+		  			return stationsHour.map(function(el){return el.stationId;}).indexOf(stationID)
+		  		}
+		  		else if(classT != "class"){
 		  			return stations.map(function(el) {return el.stationId;}).indexOf(stationID)
 		  		}
 		  		else{
 		  			return stationsClass.map(function(el) {return el.stationId;}).indexOf(stationID)
 		  		}
 		  	}
+		  }
 		}
 	}
 
